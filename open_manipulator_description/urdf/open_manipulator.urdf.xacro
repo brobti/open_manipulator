@@ -267,7 +267,7 @@
 
   <!-- Camera -->
   <joint type="fixed" name="camera_joint">
-    <origin xyz="0.1 0 0.1" rpy="0 0 0"/>
+    <origin xyz="-0.076 0 0.047" rpy="0 0 0"/>
     <child link="camera_link"/>
     <parent link="end_effector_link"/>
     <axis xyz="0 1 0" />
@@ -288,14 +288,14 @@
     <collision name='collision'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size=".05 .05 .05"/>
+        <box size=".015 .015 .015"/>
       </geometry>
     </collision>
 
     <visual name='camera_link_visual'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size=".05 .05 .05"/>
+        <box size=".015 .015 .015"/>
       </geometry>
     </visual>
 
@@ -306,7 +306,7 @@
   </gazebo>
 
   <joint type="fixed" name="camera_optical_joint">
-    <origin xyz="0 0 0" rpy="-1.5707 0 -1.5707"/>
+    <origin xyz="0 0 0" rpy="-0.785398 0 0"/>
     <child link="camera_link_optical"/>
     <parent link="camera_link"/>
   </joint>
