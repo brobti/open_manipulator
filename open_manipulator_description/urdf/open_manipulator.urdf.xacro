@@ -265,11 +265,47 @@
     </inertial>
   </link>
 
-  <!-- Camera -->
-  <joint type="fixed" name="camera_joint">
-    <origin xyz="-0.076 0 0.047" rpy="0 0 0"/>
-    <child link="camera_link"/>
+  <!-- camera stand joint -->
+  <joint name="camera_joint" type="fixed">
+    <origin xyz="-0.0595 0 0.0380" rpy="${pi*0.5} ${pi*0.5} ${pi*1.5}"/>
+    <!--origin xyz="-0.0595 0 0.0430" rpy="${pi*0.5} 0 ${pi*1.5}"ez legyen, ha már jo a csavarkotes cad-je-->
     <parent link="end_effector_link"/>
+    <child link="camera_link"/>
+  </joint>
+
+  <!-- camera link -->
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://open_manipulator_description/meshes/tartos_kamera.dae" scale="1 1 1"/>
+      </geometry>
+      <material name="red"/>
+     </visual>
+
+    <inertial>
+      <origin xyz="0 0 0" />
+      <mass value="1.0e-03" />
+      <inertia ixx="1.0e-03" ixy="0.0" ixz="0.0"
+               iyy="1.0e-03" iyz="0.0"
+               izz="1.0e-03" />
+    </inertial>
+
+    <collision name='collision'>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://open_manipulator_description/meshes/tartos_kamera.dae" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!--
+
+  <joint type="fixed" name="camera_joint">
+    <origin xyz="0.0 0.013 0.004" rpy="${pi} 0  0"/>
+    origin xyz="0.0 0.012 0.002" rpy="${pi} 0  0"/ ha mar nem kell a collisionök miat baszakodni
+    <child link="camera_link"/>
+    <parent link="camera_stand_link"/>
     <axis xyz="0 1 0" />
   </joint>
 
@@ -281,35 +317,37 @@
       <inertia
           ixx="1e-6" ixy="0" ixz="0"
           iyy="1e-6" iyz="0"
-          izz="1e-6"
-      />
+          izz="1e-6"/>
     </inertial>
 
     <collision name='collision'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size=".015 .015 .015"/>
+        <mesh filename="package://open_manipulator_description/meshes/camera.dae" scale="1 1 1"/>
       </geometry>
     </collision>
 
     <visual name='camera_link_visual'>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size=".015 .015 .015"/>
+        <mesh filename="package://open_manipulator_description/meshes/camera.dae" scale="1 1 1"/>
       </geometry>
     </visual>
 
   </link>
+  -->
 
   <gazebo reference="camera_link">
     <material>Gazebo/Red</material>
   </gazebo>
 
+
   <joint type="fixed" name="camera_optical_joint">
-    <origin xyz="0 0 0" rpy="-0.785398 0 0"/>
+    <origin xyz="0 0 0" rpy="${-pi*0.5} 0 ${-pi*0.5}"/>
     <child link="camera_link_optical"/>
     <parent link="camera_link"/>
   </joint>
+
 
   <link name="camera_link_optical">
   </link>
