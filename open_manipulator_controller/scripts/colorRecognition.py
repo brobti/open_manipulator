@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage
@@ -11,6 +11,7 @@ except ImportError:
     from Queue import Queue
 import threading
 import numpy as np
+from std_msgs.msg import String
 
 class BufferQueue(Queue):
     """Slight modification of the standard Queue that discards the oldest item
@@ -39,10 +40,6 @@ class cvThread(threading.Thread):
         self.queue = queue
         self.image = None
 
-        # Initialize published Twist message
-        self.cmd_coord = Twist()
-        self.cmd_coord.R = 0
-        self.cmd_coord.B = 0 
 
     def run(self):
         # Create a single OpenCV window
@@ -51,6 +48,9 @@ class cvThread(threading.Thread):
 
         while True:
             self.image = self.queue.get()
+
+            # Initialize published message
+            coord_message = ""
 
             # Process the current image
             maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, "R")
@@ -61,16 +61,24 @@ class cvThread(threading.Thread):
             cv2.imshow("frame", result)
 
             #publishing to node
-            self.cmd_coord.R = coordinatesR
-            self.cmd_coord.B = coordinatesB
-            pub.publish(self.cmd_coord)
+            for coord in coordinatesR:
+                coord_message += "R," + str(coord[0]) + "," + str(coord[1])
+                #if index < len(coordinatesR)-1:
+                coord_message += ";"
+
+            for coord in coordinatesB:
+                coord_message += "B," + str(coord[0]) + "," + str(coord[1])
+                #if index < len(coordinatesB)-1:
+                coord_message += ";"
+
+            pub.publish(coord_message)
 
             # Check for 'q' key to exit
             k = cv2.waitKey(6) & 0xFF
             if k in [27, ord('q')]:
                 rospy.signal_shutdown('Quit')
 
-    def processImage(self, img, channel, treshold=30):
+    def processImage(self, img, channel, treshold=10):
 
         rows,cols = img.shape[:2]
 
@@ -85,34 +93,32 @@ class cvThread(threading.Thread):
             stackedMask = np.dstack((redMask, redMask, redMask))
             contourMask = stackedMask.copy()
             crosshairMask = stackedMask.copy()
-            (_, contours,hierarchy) = cv2.findContours(redMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
+            (contours,hierarchy) = cv2.findContours(redMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
         elif channel == "G":
             stackedMask = np.dstack((greenMask, greenMask, greenMask))
             contourMask = stackedMask.copy()
             crosshairMask = stackedMask.copy()
-            (_, contours,hierarchy) = cv2.findContours(greenMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
+            (contours,hierarchy) = cv2.findContours(greenMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
         elif channel == "B":
             stackedMask = np.dstack((blueMask, blueMask, blueMask))
             contourMask = stackedMask.copy()
             crosshairMask = stackedMask.copy()
-            (_, contours,hierarchy) = cv2.findContours(blueMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
+            (contours,hierarchy) = cv2.findContours(blueMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
         else:
             binary = np.zeros_like(img)
             stackedMask = np.dstack((binary, binary, binary))
             contourMask = stackedMask.copy()
             crosshairMask = stackedMask.copy()
-            (_, contours,hierarchy) = cv2.findContours(binary.copy(), 1, cv2.CHAIN_APPROX_NONE)
+            (contours,hierarchy) = cv2.findContours(binary.copy(), 1, cv2.CHAIN_APPROX_NONE)
         
 
         # return value of findContours depends on OpenCV version
         # (_, contours,hierarchy) = cv2.findContours(redMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
 
         coordinates = []
-        # Find the biggest contour (if detected)
         if len(contours) > 0:
-            
             for contour in contours:
-                if contour.contourArea > 50:
+                if cv2.contourArea(contour) > 50:
                     #c = max(contours, key=cv2.contourArea)
                     M = cv2.moments(contour)
 
@@ -127,7 +133,8 @@ class cvThread(threading.Thread):
                     cv2.drawContours(contourMask, contour, -1, (0,255,0), 10)
                     cv2.circle(contourMask, (cx, cy), 5, (0, 255, 0), -1)
 
-                    coordinates.append([cx,cy])
+                    if cx != 0 and cy != 0:
+                        coordinates.append([cx, cy])
                     # Show crosshair and difference from middle point
                     #cv2.line(crosshairMask,(cx,0),(cx,rows),(0,0,255),10)
                     #cv2.line(crosshairMask,(0,cy),(cols,cy),(0,0,255),10)
@@ -197,12 +204,12 @@ cvThreadHandle.start()
 
 bridge = CvBridge()
 
-rospy.init_node('ball_chaser')
+rospy.init_node('color_recognition')
 # Define your image topic
 image_topic = "/head_camera/image_raw"
 # Set up your subscriber and define its callback
 rospy.Subscriber(image_topic, Image, queueMonocular)
 
-pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
+pub = rospy.Publisher('/piece_coordinates', String, queue_size=1)
 # Spin until Ctrl+C
 rospy.spin()
