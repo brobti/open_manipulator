@@ -53,11 +53,11 @@ class cvThread(threading.Thread):
             coord_message = ""
 
             # Process the current image
-            maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, "R")
-            maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, "B")
+            maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [255, 0, 0])
+            maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [0, 0, 255])
 
             # Add processed images as small images on top of main image
-            result = self.addSmallPictures(self.image, [maskR, contourR, crosshairR])
+            result = self.addSmallPictures(self.image, [contourR, contourB])
             cv2.imshow("frame", result)
 
             #publishing to node
@@ -78,17 +78,49 @@ class cvThread(threading.Thread):
             if k in [27, ord('q')]:
                 rospy.signal_shutdown('Quit')
 
-    def processImage(self, img, channel, treshold=10):
+    def processImage(self, img, color, treshold=80):
 
         rows,cols = img.shape[:2]
 
         R,G,B = self.convert2rgb(img)
 
-        redMask = self.thresholdBinary(R, (255 - treshold, 255))
-        greenMask = self.thresholdBinary(G, (255 - treshold, 255))
-        blueMask = self.thresholdBinary(B, (255 - treshold, 255))
+        # red channel
+        if (color[0] + treshold/2 <= 255) and (color[0] - treshold/2 >= 0):
+            redMask = self.thresholdBinary(R, (color[0] - treshold/2, color[0] + treshold/2))
+        elif color[0] + treshold/2 > 255:
+            redMask = self.thresholdBinary(R, (color[0] - treshold / 2, 255))
+        elif color[0] - treshold/2 < 0:
+            redMask = self.thresholdBinary(R, (0, color[0] + treshold/2))
+        else:
+            redMask = np.zeros_like(img)  # error handling
 
+        # green channel
+        if (color[1] + treshold/2 <= 255) and (color[1] - treshold/2 >= 0):
+            greenMask = self.thresholdBinary(G, (color[1] - treshold/2, color[1] + treshold/2))
+        elif color[1] + treshold/2 > 255:
+            greenMask = self.thresholdBinary(G, (color[1] - treshold / 2, 255))
+        elif color[1] - treshold/2 < 0:
+            greenMask = self.thresholdBinary(G, (0, color[1] + treshold/2))
+        else:
+            greenMask = np.zeros_like(img)  # error handling
 
+        # blue channel
+        if (color[2] + treshold/2 <= 255) and (color[2] - treshold/2 >= 0):
+            blueMask = self.thresholdBinary(B, (color[2] - treshold/2, color[2] + treshold/2))
+        elif color[2] + treshold/2 > 255:
+            blueMask = self.thresholdBinary(B, (color[2] - treshold / 2, 255))
+        elif color[2] - treshold/2 < 0:
+            blueMask = self.thresholdBinary(B, (0, color[2] + treshold/2))
+        else:
+            blueMask = np.zeros_like(img)  # error handling
+
+        fullMask = redMask & greenMask & blueMask
+
+        stackedMask = np.dstack((fullMask, fullMask, fullMask))
+        contourMask = stackedMask.copy()
+        crosshairMask = stackedMask.copy()
+        (contours, hierarchy) = cv2.findContours(fullMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
+        '''
         if channel == "R":
             stackedMask = np.dstack((redMask, redMask, redMask))
             contourMask = stackedMask.copy()
@@ -110,7 +142,7 @@ class cvThread(threading.Thread):
             contourMask = stackedMask.copy()
             crosshairMask = stackedMask.copy()
             (contours,hierarchy) = cv2.findContours(binary.copy(), 1, cv2.CHAIN_APPROX_NONE)
-        
+        '''
 
         # return value of findContours depends on OpenCV version
         # (_, contours,hierarchy) = cv2.findContours(redMask.copy(), 1, cv2.CHAIN_APPROX_NONE)
@@ -118,7 +150,7 @@ class cvThread(threading.Thread):
         coordinates = []
         if len(contours) > 0:
             for contour in contours:
-                if cv2.contourArea(contour) > 50:
+                if cv2.contourArea(contour) > 100:
                     #c = max(contours, key=cv2.contourArea)
                     M = cv2.moments(contour)
 
@@ -130,7 +162,7 @@ class cvThread(threading.Thread):
                         cx, cy = 0, 0
 
                     # Show contour and centroid
-                    cv2.drawContours(contourMask, contour, -1, (0,255,0), 10)
+                    cv2.drawContours(contourMask, contour, -1, (color[2], color[1], color[0]), 10)
                     cv2.circle(contourMask, (cx, cy), 5, (0, 255, 0), -1)
 
                     if cx != 0 and cy != 0:
@@ -141,7 +173,7 @@ class cvThread(threading.Thread):
 
 
         # Return processed frames
-        return redMask, contourMask, crosshairMask, coordinates
+        return fullMask, contourMask, crosshairMask, coordinates
 
     # Convert to RGB channels
     def convert2rgb(self, img):
@@ -210,6 +242,6 @@ image_topic = "/head_camera/image_raw"
 # Set up your subscriber and define its callback
 rospy.Subscriber(image_topic, Image, queueMonocular)
 
-pub = rospy.Publisher('/piece_coordinates', String, queue_size=1)
+pub = rospy.Publisher('/color_recognition', String, queue_size=1)
 # Spin until Ctrl+C
 rospy.spin()
