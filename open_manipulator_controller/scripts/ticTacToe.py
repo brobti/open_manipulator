@@ -1,6 +1,5 @@
 import random as rnd
 from std_msgs.msg import String
-import rospy
 from kinematicsMessage.srv import *
 import math
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
@@ -37,17 +36,17 @@ def move_selector(board, player):
     if board == [0, 0, 0, 0, 0, 0, 0, 0, 0]:  # Ha üres, random választunk elsőre
         position = rnd.randint(0, 8)
         return position
-    elif isWinner(board, player) or isWinner(board, opponent):  # Megnézzük, nem-e nyert már valaki, ha igen, akkor 0-t küldünk vissza pozícióként
+    elif is_winner(board, player) or is_winner(board, opponent):  # Megnézzük, nem-e nyert már valaki, ha igen, akkor 0-t küldünk vissza pozícióként
         position = -1
         return position
     else:  # Megnézzük melyik cella szabad, és abból választunk logika alapján
-        possibleMoves = emptyCells(board)
+        possibleMoves = empty_cells(board)
 
         for i in [player, opponent]:
             for j in possibleMoves:
                 boardCopy = board[:]
                 boardCopy[j] = i
-                if isWinner(boardCopy, i):
+                if is_winner(boardCopy, i):
                     position = j
                     return position
 
@@ -74,7 +73,7 @@ def move_selector(board, player):
             return position
 
 
-def isWinner(board, color):
+def is_winner(board, color):
     return ((board[6] == color and board[7] == color and board[8] == color) or
             (board[3] == color and board[4] == color and board[5] == color) or
             (board[0] == color and board[1] == color and board[2] == color) or
@@ -85,7 +84,7 @@ def isWinner(board, color):
             (board[2] == color and board[4] == color and board[6] == color))
 
 
-def emptyCells(board):
+def empty_cells(board):
     possibleMoves = []
     j = 0
     for i in board:
@@ -95,7 +94,8 @@ def emptyCells(board):
     return possibleMoves
 
 
-def boardColorRecognition(msg):
+def board_color_recognition(msg):
+    global board
     points = msg.split(";")
     for point in points:
         data = point.split(",")
@@ -122,6 +122,8 @@ def boardColorRecognition(msg):
                 board[column*3+row] = 1
             elif data[0] == 'R':
                 board[column*3+row] = 2
+
+
 def find_figure(player):
     global bluePiecesPlaced
     global redPiecesPlaced
@@ -204,7 +206,7 @@ if __name__ == "__main__":
     pub = rospy.Publisher('/gripper_controller/command', JointTrajectory, queue_size=1)
     rospy.spin()
 
-    player1 = randint(1,2)
+    player1 = rnd.randint(1, 2)
         
     if player1 == 1: # kék
         player2 = 2 # piros
@@ -213,9 +215,13 @@ if __name__ == "__main__":
 
     player = player1
 
+    retVal = kinematics_client_operation([basePosition[0], basePosition[1], pick_up_high], -math.pi / 2)
+    if not retVal:
+        print("error")
+
     for i in range(1, 8):
         
-        board = boardColorRecognition()
+        board_color_recognition()
 
         position = move_selector(board, player)
 
