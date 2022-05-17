@@ -51,7 +51,7 @@ def move_selector(board, player):
                     return position
 
         if 4 in possibleMoves:
-            position = 5
+            position = 4
             return position
 
         cornersOpen = []
