@@ -2,7 +2,6 @@
 
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage
-from geometry_msgs.msg import Twist
 import cv2
 import rospy
 try:
