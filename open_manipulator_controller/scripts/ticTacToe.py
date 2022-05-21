@@ -18,7 +18,7 @@ pick_up_high = 0.100
 pick_up_low = 0.015
 
 # az a pozíció, amiből a robot a táblát nézi
-basePosition = [0, 0.12]
+basePosition = [0.12, 0]
 
 # a bábúk felvételi pozíciói és a tábla pozíciói
 redPieces = [[-0.064, 0.029], [-0.0213, 0.029], [0.0213, 0.029], [0.064, 0.029]]
@@ -302,7 +302,7 @@ def tic_tac_toe():
     while not rospy.is_shutdown():  # run the node until Ctrl-C is pressed
         if count_of_current_step == 0:
             if not sent_to_base_state:
-                kinematics_client_operation([basePosition[0], basePosition[1], pick_up_high], -math.pi / 2)
+                kinematics_client_operation([basePosition[0], basePosition[1], pick_up_high], math.pi / 2)
                 sent_to_base_state = True
             if not action_in_progress:
                 if not action_result:
