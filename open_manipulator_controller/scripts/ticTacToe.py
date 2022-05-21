@@ -3,6 +3,7 @@
 import random as rnd
 from std_msgs.msg import String
 from open_manipulator_tools.msg import kinematicsActionAction, kinematicsActionGoal, kinematicsActionResult
+from gazebo_ros_link_attacher.srv import Attach, AttachRequest, AttachResponse
 import math
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import rospy
@@ -14,26 +15,34 @@ import actionlib
 board = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 # Z síkok a felvétel és lerakás során
-pick_up_high = 0.100
-pick_up_low = 0.015
+pick_up_high = 0.06
+pick_up_low = 0.02
 
 # az a pozíció, amiből a robot a táblát nézi
-basePosition = [0.12, 0]
+basePosition = [0.15, 0, 0.1]
 
 # a bábúk felvételi pozíciói és a tábla pozíciói
-redPieces = [[-0.064, 0.029], [-0.0213, 0.029], [0.0213, 0.029], [0.064, 0.029]]
+redPieces = [[0.059, -0.094], [0.059, -0.0363], [0.059, 0.0363], [0.059, 0.094]]
+redPiecesNames = ["hengeresBabuPiros_1", "hengeresBabuPiros_2", "hengeresBabuPiros_3", "hengeresBabuPiros_4"]
 redPiecesPlaced = 0
-bluePieces = [[-0.064, 0.077], [-0.0213, 0.077], [0.0213, 0.077], [0.064, 0.077]]
+bluePieces = [[0.107, -0.094], [0.107, -0.0363], [0.107, 0.0363], [0.107, 0.094]]
+bluePiecesNames = ["hengeresBabuKek_4", "hengeresBabuKek_3", "hengeresBabuKek_2", "hengeresBabuKek_1"]
 bluePiecesPlaced = 0
+'''
 boardPosition = [[-0.048, 0.2155], [0, 0.2155], [0.048, 0.2155],
                  [-0.048, 0.1675], [0, 0.1675], [0.048, 0.1675],
                  [-0.048, 0.1195], [0, 0.1195], [0.048, 0.1195]]
+'''
+boardPosition = [[0.2455, -0.048], [0.2455, 0], [0.2455, 0.048],
+                 [0.1975, -0.048], [0.1975, 0], [0.1975, 0.048],
+                 [0.1495, -0.048], [0.1495, 0], [0.1495, 0.048]]
 
-# global variables for the action server communication
+# global variables for the action servser communication
 action_in_progress = False
 action_result = False
 
 # global variables for the runtime states of the tic-tac-toe
+position = 0
 count_of_current_step = 0
 sent_to_base_state = False
 state_of_move_action = "Empty"
@@ -111,43 +120,54 @@ def empty_cells(board):
 
 def board_color_recognition(msg):
     global board
-    points = msg.split(";")
+    points = str(msg.data).split(";")
     for point in points:
-        data = point.split(",")
-        if data[1] > 168 and data[1] < 227:
-            column = 0
-        elif data[1] > 289 and data[1] < 349:
-            column = 1
-        elif data[1] > 410 and data[1] < 470:
-            column = 2
-        else:
-            column = -1
+        if point !=  "":
+            data_split = point.split(",")
+            #print(data_split)
+            data = []
+            data.append(data_split[0])
+            data.append(int(data_split[1]))
+            data.append(int(data_split[2]))
+            if data[1] > 168 and data[1] < 227:
+                column = 0
+            elif data[1] > 289 and data[1] < 349:
+                column = 1
+            elif data[1] > 410 and data[1] < 470:
+                column = 2
+            else:
+                column = -1
 
-        if data[2] > 96 and data[2] < 156:
-            row = 0
-        elif data[2] > 217 and data[2] < 277:
-            row = 1
-        elif data[2] > 338 and data[2] < 398:
-            row = 2
-        else:
-            row = -1
+            if data[2] > 96 and data[2] < 156:
+                row = 0
+            elif data[2] > 217 and data[2] < 277:
+                row = 1
+            elif data[2] > 338 and data[2] < 398:
+                row = 2
+            else:
+                row = -1
 
-        if row != -1 and column != -1:
-            if data[0] == 'B':
-                board[column*3+row] = 1
-            elif data[0] == 'R':
-                board[column*3+row] = 2
+            if row != -1 and column != -1:
+                if data[0] == 'B':
+                    board[column*3+row] = 1
+                elif data[0] == 'R':
+                    board[column*3+row] = 2
 
+
+def iterate(player):
+    global bluePiecesPlaced, redPiecesPlaced
+    if player == 1:
+        bluePiecesPlaced += 1
+    elif player == 2:
+        redPiecesPlaced += 1
 
 def find_figure(player):
     global bluePiecesPlaced
     global redPiecesPlaced
     if player == 1:
         figurePosition = bluePieces[bluePiecesPlaced]
-        bluePiecesPlaced += 1
     elif player == 2:
         figurePosition = redPieces[redPiecesPlaced]
-        redPiecesPlaced += 1
     else:
         figurePosition = [0, 0]
 
@@ -170,7 +190,7 @@ def kinematics_client_operation(coord, angle=0.0):
     goal = kinematicsActionGoal(coord[0], coord[1], coord[2], angle)
     action_in_progress = True
     client.send_goal(goal, done_cb=kinematics_client_done)
-    rospy.loginfo('Goal sent...')
+    rospy.loginfo('Goal (%f, %f, %f) sent...', coord[0], coord[1], coord[2])
     #client.wait_for_result()
     #return client.get_result()
     '''try:
@@ -181,31 +201,72 @@ def kinematics_client_operation(coord, angle=0.0):
         print("Service call failed: %s" % e)'''
 
 
+def attach(name):
+    attach_srv = rospy.ServiceProxy('/link_attacher_node/attach', Attach)
+    attach_srv.wait_for_service()
+    rospy.loginfo("Created ServiceProxy to /link_attacher_node/attach")
 
-def gripper_operation(gripperAction):
+    # Link them
+    rospy.loginfo("Attaching gripper and %s.", name)
+    req = AttachRequest()
+    req.model_name_1 = "robot"
+    req.link_name_1 = "gripper_link"
+    req.model_name_2 = name
+    req.link_name_2 = "link"
+    attach_srv.call(req)
+
+
+def detach(name):
+    attach_srv = rospy.ServiceProxy('/link_attacher_node/detach', Attach)
+    attach_srv.wait_for_service()
+    rospy.loginfo("Created ServiceProxy to /link_attacher_node/detach")
+
+    # Link them
+    rospy.loginfo("Detaching gripper and %s.", name)
+    req = AttachRequest()
+    req.model_name_1 = "robot"
+    req.link_name_1 = "gripper_link"
+    req.model_name_2 = name
+    req.link_name_2 = "link"
+    attach_srv.call(req)
+
+
+def gripper_operation(player, gripperAction):
     '''False = open, True = Close'''
     controller_name = "gripper_controller"
     joint_names = rospy.get_param("/%s/joints" % controller_name)
     rospy.loginfo("Joint names: %s" % joint_names)
-    rate = rospy.Rate(10)
-
     trajectory_command = JointTrajectory()
     trajectory_command.header.stamp = rospy.Time.now()
     trajectory_command.joint_names = joint_names
     point = JointTrajectoryPoint()
     # Joint names: ['gripper']
-    if (gripperAction): #true->close
+
+    pieceName = ""
+    if player == 1:
+        pieceName = bluePiecesNames[bluePiecesPlaced]
+    elif player == 2:
+        pieceName = redPiecesNames[redPiecesPlaced]
+
+    if gripperAction: #true->close
         point.positions = [-0.1]
     else: #false->open
-        point.positions = [0.1]
+        point.positions = [0.05]
+
     point.velocities = [0.0]
     point.time_from_start = rospy.rostime.Duration(1, 0)
     trajectory_command.points = [point]
-
     pub.publish(trajectory_command)
 
+    rospy.sleep(1)
+    if not gripperAction:  # detach model
+        detach(pieceName)
+    rospy.sleep(1) # várjon hogy becsukódjon a megfogó
+    if gripperAction:  # attach model
+        attach(pieceName)
 
-def pick_or_place(position, gripperAction):
+
+def pick_or_place(position, player, gripperAction):
     global state_of_pick_place, return_of_pick_place
     if not action_in_progress:
         '''gripperAction: False = open, True = Close'''
@@ -231,8 +292,7 @@ def pick_or_place(position, gripperAction):
                 return_of_pick_place = "cannot reach position: " + position + " at pick_up_low"
             else:
                 state_of_pick_place = "SecondFinished"
-                gripper_operation(gripperAction)
-                rospy.sleep(1) # várjon hogy becsukódjon a megfogó
+                gripper_operation(player, gripperAction)
 
         elif state_of_pick_place == "SecondFinished":
             kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
@@ -244,7 +304,6 @@ def pick_or_place(position, gripperAction):
                 return_of_pick_place = "cannot reach position: " + position + " at pick_up_high"
             else:
                 state_of_pick_place = "Done"
-                gripper_operation(gripperAction)
         return_of_pick_place = "Done"
 
 
@@ -252,7 +311,7 @@ def move(position, player):
     global state_of_move_action, return_of_pick_place, state_of_pick_place, return_of_move
     '''position: 0-8 position to place on the board; player: 1: blue, 2: red'''
     if state_of_move_action == "Empty":
-        pick_or_place(find_figure(player), True)
+        pick_or_place(find_figure(player), player, True)
         if state_of_pick_place == "Done":
             if return_of_pick_place != "Done":
                 return_of_move = "Pick operation failed"
@@ -263,7 +322,7 @@ def move(position, player):
                 state_of_move_action = "FirstDone"
 
     elif state_of_move_action == "FirstDone":
-        pick_or_place(boardPosition[position], False)
+        pick_or_place(boardPosition[position], player, False)
         if state_of_pick_place == "Done":
             if return_of_pick_place != "Done":
                 return_of_move = "Pick operation failed"
@@ -272,9 +331,11 @@ def move(position, player):
             else:
                 state_of_pick_place = "Empty"
                 state_of_move_action = "SecondDone"
+                iterate(player)
 
     elif state_of_move_action == "SecondDone" and not action_in_progress:
-        kinematics_client_operation([basePosition[0], basePosition[1], pick_up_high], -math.pi/2)
+        kinematics_client_operation([basePosition[0], basePosition[1], basePosition[2]], math.pi/2)
+        state_of_move_action = "ThirdStarted"
 
     elif state_of_move_action == "ThirdStarted" and not action_in_progress:
         if not action_result:
@@ -288,7 +349,7 @@ def move(position, player):
 
 
 def tic_tac_toe():
-    global sent_to_base_state, count_of_current_step, state_of_move_action
+    global sent_to_base_state, count_of_current_step, state_of_move_action, position
     # initial player selection:
     player1 = rnd.randint(1, 2)
     if player1 == 1:  # kék
@@ -302,7 +363,8 @@ def tic_tac_toe():
     while not rospy.is_shutdown():  # run the node until Ctrl-C is pressed
         if count_of_current_step == 0:
             if not sent_to_base_state:
-                kinematics_client_operation([basePosition[0], basePosition[1], pick_up_high], math.pi / 2)
+                kinematics_client_operation([basePosition[0], basePosition[1], basePosition[2]], math.pi / 2)
+                gripper_operation(player, False)
                 sent_to_base_state = True
             if not action_in_progress:
                 if not action_result:
@@ -311,11 +373,16 @@ def tic_tac_toe():
                     count_of_current_step += 1
 
         if 0 < count_of_current_step < 10:
-            board_color_recognition(rospy.wait_for_message('/color_recognition', String, 5))
-            position = move_selector(board, player)
-            if position == -1:
-                rospy.loginfo("error while selecting position for the next player")
-                break
+            if state_of_move_action == "Empty" and state_of_pick_place == "Empty":
+                board_color_recognition(rospy.wait_for_message('/color_recognition', String, 5))
+                rospy.loginfo("current board: (%i, %i, %i),(%i,%i,%i),(%i,%i,%i)",
+                              board[0], board[1], board[2],
+                              board[3], board[4], board[5],
+                              board[6], board[7], board[8])
+                position = move_selector(board, player)
+                if position == -1:
+                    rospy.loginfo("error while selecting position for the next player")
+                    break
             move(position, player)
             if state_of_move_action == "Done":
                 if return_of_move == "Done":
