@@ -15,8 +15,9 @@ import actionlib
 board = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 # Z síkok a felvétel és lerakás során
-pick_up_high = 0.06
+pick_up_high = 0.08
 pick_up_low = 0.02
+place_low = 0.0205
 
 # az a pozíció, amiből a robot a táblát nézi
 basePosition = [0.15, 0, 0.1]
@@ -33,9 +34,9 @@ boardPosition = [[-0.048, 0.2155], [0, 0.2155], [0.048, 0.2155],
                  [-0.048, 0.1675], [0, 0.1675], [0.048, 0.1675],
                  [-0.048, 0.1195], [0, 0.1195], [0.048, 0.1195]]
 '''
-boardPosition = [[0.2455, -0.048], [0.2455, 0], [0.2455, 0.048],
-                 [0.1975, -0.048], [0.1975, 0], [0.1975, 0.048],
-                 [0.1495, -0.048], [0.1495, 0], [0.1495, 0.048]]
+boardPosition = [[0.2455, 0.048], [0.2455, 0], [0.2455, -0.048],
+                 [0.1975, 0.048], [0.1975, 0], [0.1975, -0.048],
+                 [0.1495, 0.048], [0.1495, 0], [0.1495, -0.048]]
 
 # global variables for the action servser communication
 action_in_progress = False
@@ -129,11 +130,11 @@ def board_color_recognition(msg):
             data.append(data_split[0])
             data.append(int(data_split[1]))
             data.append(int(data_split[2]))
-            if data[1] > 168 and data[1] < 227:
+            if data[1] > 80 and data[1] < 227:
                 column = 0
-            elif data[1] > 289 and data[1] < 349:
+            elif data[1] > 250 and data[1] < 387:
                 column = 1
-            elif data[1] > 410 and data[1] < 470:
+            elif data[1] > 410 and data[1] < 558:
                 column = 2
             else:
                 column = -1
@@ -142,16 +143,16 @@ def board_color_recognition(msg):
                 row = 0
             elif data[2] > 217 and data[2] < 277:
                 row = 1
-            elif data[2] > 338 and data[2] < 398:
+            elif data[2] > 338 and data[2] < 410:
                 row = 2
             else:
                 row = -1
 
             if row != -1 and column != -1:
                 if data[0] == 'B':
-                    board[column*3+row] = 1
+                    board[column+row*3] = 1
                 elif data[0] == 'R':
-                    board[column*3+row] = 2
+                    board[column+row*3] = 2
 
 
 def iterate(player):
@@ -251,14 +252,14 @@ def gripper_operation(player, gripperAction):
     if gripperAction: #true->close
         point.positions = [-0.1]
     else: #false->open
-        point.positions = [0.05]
+        point.positions = [0.03]
 
-    point.velocities = [0.0]
+    point.velocities = [0.5]
     point.time_from_start = rospy.rostime.Duration(1, 0)
     trajectory_command.points = [point]
     pub.publish(trajectory_command)
 
-    rospy.sleep(1)
+    rospy.sleep(1.5)
     if not gripperAction:  # detach model
         detach(pieceName)
     rospy.sleep(1) # várjon hogy becsukódjon a megfogó
@@ -375,7 +376,7 @@ def tic_tac_toe():
         if 0 < count_of_current_step < 10:
             if state_of_move_action == "Empty" and state_of_pick_place == "Empty":
                 board_color_recognition(rospy.wait_for_message('/color_recognition', String, 5))
-                rospy.loginfo("current board: (%i, %i, %i),(%i,%i,%i),(%i,%i,%i)",
+                rospy.loginfo("current board: (%i,%i,%i),(%i,%i,%i),(%i,%i,%i)",
                               board[0], board[1], board[2],
                               board[3], board[4], board[5],
                               board[6], board[7], board[8])
