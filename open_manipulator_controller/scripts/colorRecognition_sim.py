@@ -52,8 +52,8 @@ class cvThread(threading.Thread):
             coord_message = ""
 
             # Process the current image
-            maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [150, 20, 60])
-            maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [30, 80, 170])
+            maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [255, 0, 0])
+            maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [0, 0, 255])
 
             # Add processed images as small images on top of main image
             result = self.addSmallPictures(self.image, [contourR, contourB])
@@ -226,7 +226,7 @@ def queueMonocular(msg):
 
 print("OpenCV version: %s" % cv2.__version__)
 
-queueSize = 1      
+queueSize = 1
 qMono = BufferQueue(queueSize)
 
 cvThreadHandle = cvThread(qMono)

@@ -252,7 +252,7 @@ def gripper_operation(player, gripperAction):
     if gripperAction: #true->close
         point.positions = [-0.01]
     else: #false->open
-        point.positions = [0.005]
+        point.positions = [0.003]
 
     point.velocities = [0.5]
     point.time_from_start = rospy.rostime.Duration(1, 0)
