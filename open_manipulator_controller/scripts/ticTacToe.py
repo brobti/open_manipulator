@@ -8,6 +8,7 @@ import math
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import rospy
 import actionlib
+import sys
 
 # A board egy lista a jelenlegi állással, amit színfelismerés alapján kapunk meg.
 # Ezek alapján dönt a robot arról, milyen lépést választ.
@@ -15,12 +16,11 @@ import actionlib
 board = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 # Z síkok a felvétel és lerakás során
-pick_up_high = 0.08
-pick_up_low = 0.02
-place_low = 0.0205
+pick_up_high = 0.1
+pick_up_low = 0.03
 
 # az a pozíció, amiből a robot a táblát nézi
-basePosition = [0.15, 0, 0.1]
+basePosition = [0.14, 0, 0.12]
 
 # a bábúk felvételi pozíciói és a tábla pozíciói
 redPieces = [[0.059, -0.094], [0.059, -0.0363], [0.059, 0.0363], [0.059, 0.094]]
@@ -61,19 +61,19 @@ def move_selector(board, player):
     if board == [0, 0, 0, 0, 0, 0, 0, 0, 0]:  # Ha üres, random választunk elsőre
         position = rnd.randint(0, 8)
         return position
-    elif is_winner(board, player) or is_winner(board, opponent):  # Megnézzük, nem-e nyert már valaki, ha igen, akkor 0-t küldünk vissza pozícióként
+    elif is_winner(board, player) or is_winner(board, opponent):  # Megnézzük, nem-e nyert már valaki, ha igen, akkor -1-et küldünk vissza pozícióként
         position = -1
         return position
-    else:  # Megnézzük melyik cella szabad, és abból választunk logika alapján
+    else:  # Megnézzük, melyik cella szabad, és abból választunk logika alapján
         possibleMoves = empty_cells(board)
 
         for i in [player, opponent]:
-            for j in possibleMoves:
+            for move in possibleMoves:
                 boardCopy = board[:]
-                boardCopy[j] = i
+                boardCopy[move] = i
                 if is_winner(boardCopy, i):
-                    position = j
-                    return position
+                    rospy.loginfo(str(move) + " winner")
+                    return move
 
         if 4 in possibleMoves:
             position = 4
@@ -139,11 +139,11 @@ def board_color_recognition(msg):
             else:
                 column = -1
 
-            if data[2] > 96 and data[2] < 156:
+            if data[2] > 20 and data[2] < 156:
                 row = 0
             elif data[2] > 217 and data[2] < 277:
                 row = 1
-            elif data[2] > 338 and data[2] < 410:
+            elif data[2] > 338 and data[2] < 480:
                 row = 2
             else:
                 row = -1
@@ -249,22 +249,29 @@ def gripper_operation(player, gripperAction):
     elif player == 2:
         pieceName = redPiecesNames[redPiecesPlaced]
 
-    if gripperAction: #true->close
-        point.positions = [-0.01]
-    else: #false->open
-        point.positions = [0.003]
+    if simSwitch == "sim":
+        if gripperAction: #true->close
+            point.positions = [-0.01]
+        else: #false->open
+            point.positions = [0.003]
+    else:
+        if gripperAction: #true->close
+            point.positions = [0.006]
+        else: #false->open
+            point.positions = [0.0]
 
-    point.velocities = [0.5]
+
+    point.velocities = [0.0]
     point.time_from_start = rospy.rostime.Duration(1, 0)
     trajectory_command.points = [point]
     pub.publish(trajectory_command)
 
-    rospy.sleep(1.5)
-    if not gripperAction:  # detach model
-        detach(pieceName)
+    rospy.sleep(0.5)
+    if simSwitch == "sim" and not gripperAction and pieceName != "":  # detach model
+         detach(pieceName)
     rospy.sleep(1) # várjon hogy becsukódjon a megfogó
-    if gripperAction:  # attach model
-        attach(pieceName)
+    if simSwitch == "sim" and gripperAction and pieceName != "":  # attach model
+         attach(pieceName)
 
 
 def pick_or_place(position, player, gripperAction):
@@ -273,7 +280,10 @@ def pick_or_place(position, player, gripperAction):
         '''gripperAction: False = open, True = Close'''
         if state_of_pick_place == "Empty":
             return_of_pick_place = "Empty"
-            kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
+            if gripperAction:  # pick operation
+                kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
+            else:  # place operation
+                kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/4)
             state_of_pick_place = "FirstStarted"
 
         elif state_of_pick_place == "FirstStarted":
@@ -296,7 +306,10 @@ def pick_or_place(position, player, gripperAction):
                 gripper_operation(player, gripperAction)
 
         elif state_of_pick_place == "SecondFinished":
-            kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
+            if gripperAction or simSwitch == "sim":  # pick operation
+                kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
+            else:  # place operation
+                kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/4)
             state_of_pick_place = "ThirdStarted"
 
         elif state_of_pick_place == "ThirdStarted":
@@ -365,7 +378,9 @@ def tic_tac_toe():
         if count_of_current_step == 0:
             if not sent_to_base_state:
                 kinematics_client_operation([basePosition[0], basePosition[1], basePosition[2]], math.pi / 2)
-                gripper_operation(player, False)
+                if simSwitch != "sim":
+                    gripper_operation(-1, True)
+                gripper_operation(-1, False)
                 sent_to_base_state = True
             if not action_in_progress:
                 if not action_result:
@@ -375,6 +390,7 @@ def tic_tac_toe():
 
         if 0 < count_of_current_step < 10:
             if state_of_move_action == "Empty" and state_of_pick_place == "Empty":
+                rospy.sleep(2)
                 board_color_recognition(rospy.wait_for_message('/color_recognition', String, 5))
                 rospy.loginfo("current board: (%i,%i,%i),(%i,%i,%i),(%i,%i,%i)",
                               board[0], board[1], board[2],
@@ -382,7 +398,7 @@ def tic_tac_toe():
                               board[6], board[7], board[8])
                 position = move_selector(board, player)
                 if position == -1:
-                    rospy.loginfo("error while selecting position for the next player")
+                    rospy.loginfo("The game ended.")
                     break
             move(position, player)
             if state_of_move_action == "Done":
@@ -397,7 +413,14 @@ def tic_tac_toe():
                     rospy.loginfo(return_of_move)
             rate.sleep()
 
+
 if __name__ == "__main__":
+    try:
+        simSwitch = rospy.myargv(argv=sys.argv)[1]
+        basePosition = [0.15, 0, 0.1]
+    except:
+        simSwitch = ""
+        basePosition = [0.14, 0, 0.12]
     rospy.init_node('tic_tac_toe')
     pub = rospy.Publisher('/gripper_controller/command', JointTrajectory, queue_size=1)
     tic_tac_toe()

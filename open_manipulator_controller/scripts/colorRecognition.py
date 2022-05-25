@@ -11,6 +11,7 @@ except ImportError:
 import threading
 import numpy as np
 from std_msgs.msg import String
+import sys
 
 class BufferQueue(Queue):
     """Slight modification of the standard Queue that discards the oldest item
@@ -52,8 +53,12 @@ class cvThread(threading.Thread):
             coord_message = ""
 
             # Process the current image
-            maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [150, 20, 60])
-            maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [30, 80, 170])
+            if simSwitch == "sim":
+                maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [255, 0, 0])
+                maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [0, 0, 255])
+            else:
+                maskR, contourR, crosshairR, coordinatesR = self.processImage(self.image, [90, 30, 30])
+                maskB, contourB, crosshairB, coordinatesB = self.processImage(self.image, [30, 30, 90])
 
             # Add processed images as small images on top of main image
             result = self.addSmallPictures(self.image, [contourR, contourB])
@@ -77,7 +82,7 @@ class cvThread(threading.Thread):
             if k in [27, ord('q')]:
                 rospy.signal_shutdown('Quit')
 
-    def processImage(self, img, color, treshold=80):
+    def processImage(self, img, color, treshold=50):
 
         rows,cols = img.shape[:2]
 
@@ -224,7 +229,14 @@ def queueMonocular(msg):
     else:
         qMono.put(cv2Img)
 
+
 print("OpenCV version: %s" % cv2.__version__)
+
+try:
+    simSwitch = rospy.myargv(argv=sys.argv)[1]
+except:
+    simSwitch = ""
+
 
 queueSize = 1      
 qMono = BufferQueue(queueSize)
