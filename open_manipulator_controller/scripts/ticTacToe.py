@@ -306,7 +306,7 @@ def pick_or_place(position, player, gripperAction):
                 gripper_operation(player, gripperAction)
 
         elif state_of_pick_place == "SecondFinished":
-            if gripperAction or simSwitch == "sim":  # pick operation
+            if gripperAction:  # pick operation
                 kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/2)
             else:  # place operation
                 kinematics_client_operation([position[0], position[1], pick_up_high], math.pi/4)
@@ -417,10 +417,12 @@ def tic_tac_toe():
 if __name__ == "__main__":
     try:
         simSwitch = rospy.myargv(argv=sys.argv)[1]
-        basePosition = [0.15, 0, 0.1]
+        basePosition = [0.15, 0, 0.09]
+        pick_up_low = 0.02
     except:
         simSwitch = ""
         basePosition = [0.14, 0, 0.12]
+        pick_up_low = 0.03
     rospy.init_node('tic_tac_toe')
     pub = rospy.Publisher('/gripper_controller/command', JointTrajectory, queue_size=1)
     tic_tac_toe()
